@@ -33,20 +33,20 @@ def append_history(message):
     history.append(message)
     if len(history) > MAX_HISTORY:
         del history[:-MAX_HISTORY]
-    socketio.emit('update_history', history, broadcast=True)
+    socketio.emit('update_history', history)
 
 
 def set_timer(value):
     global timer_value
     with timer_lock:
         timer_value = max(0, int(value))
-    socketio.emit('update_timer', {'value': timer_value}, broadcast=True)
+    socketio.emit('update_timer', {'value': timer_value})
 
 
 def append_message(message, public=True, sid=None):
     append_history(message)
     if public:
-        socketio.emit('message', {'text': message}, broadcast=True)
+        socketio.emit('message', {'text': message})
     elif sid:
         socketio.emit('message', {'text': message}, to=sid)
 
@@ -96,7 +96,7 @@ def set_ready(data):
     if username in players:
         players[username]['ready'] = True
         append_message(f'{username} est prêt.')
-        emit('update_players', players, broadcast=True)
+        emit('update_players', players)
         if len(players) >= 2 and all(p['ready'] for p in players.values()):
             start_game()
 
@@ -118,10 +118,10 @@ def reset_game(data):
     current_turn = turn_order[0] if turn_order else None
     if current_turn:
         players[current_turn]['turn'] = True
-    emit('game_reset', {'players': players, 'scores': scores}, broadcast=True)
-    emit('update_turn', current_turn, broadcast=True)
-    emit('update_players', players, broadcast=True)
-    emit('update_scores', scores, broadcast=True)
+    emit('game_reset', {'players': players, 'scores': scores})
+    emit('update_turn', current_turn)
+    emit('update_players', players)
+    emit('update_scores', scores)
     set_timer(0)
     append_message(f'{username} a réinitialisé la partie.')
 
@@ -132,11 +132,11 @@ def start_game():
     random.shuffle(turn_order)
     current_turn = turn_order[0]
     players[current_turn]['turn'] = True
-    emit('game_start', broadcast=True)
+    emit('game_start')
     append_message(f'La partie commence ! C’est au tour de {current_turn}.')
-    emit('update_turn', current_turn, broadcast=True)
-    emit('update_scores', scores, broadcast=True)
-    emit('update_players', players, broadcast=True)
+    emit('update_turn', current_turn)
+    emit('update_scores', scores)
+    emit('update_players', players)
     set_timer(TURN_SECONDS)
 
 @socketio.on('guess_letter')
@@ -175,14 +175,14 @@ def guess_letter(data):
         if found:
             scores[username] += 1
             append_message(f'{username} a trouvé {letter} sur {target} !')
-            emit('update_word', {'target': target, 'revealed': revealed}, broadcast=True)
-            emit('update_scores', scores, broadcast=True)
+            emit('update_word', {'target': target, 'revealed': revealed})
+            emit('update_scores', scores)
             if ''.join(revealed) == country:
                 players[target]['eliminated'] = True
                 scores[username] += 1
                 append_message(f'{target} est éliminé(e) par {username} !')
-                emit('player_eliminated', {'target': target, 'by': username}, broadcast=True)
-                emit('update_scores', scores, broadcast=True)
+                emit('player_eliminated', {'target': target, 'by': username})
+                emit('update_scores', scores)
                 if not next_turn():
                     return
         else:
@@ -226,7 +226,7 @@ def next_turn():
     active = [p for p in turn_order if not players[p]['eliminated']]
     if len(active) <= 1:
         append_message('Partie terminée.')
-        socketio.emit('game_over', {'scores': scores}, broadcast=True)
+        socketio.emit('game_over', {'scores': scores})
         return False
     if current_turn not in active:
         current_turn = active[0]
@@ -236,8 +236,8 @@ def next_turn():
     for p in players:
         players[p]['turn'] = p == current_turn
     append_message(f'Nouvel ordre : c’est au tour de {current_turn}.')
-    socketio.emit('update_turn', current_turn, broadcast=True)
-    socketio.emit('update_players', players, broadcast=True)
+    socketio.emit('update_turn', current_turn)
+    socketio.emit('update_players', players)
     set_timer(TURN_SECONDS)
     return True
 
