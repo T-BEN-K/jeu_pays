@@ -9,82 +9,32 @@
   <div class="container">
     <h1>🌍 Partie en cours</h1>
     <div id="turn"></div>
-
     <h2>Choisis un joueur cible</h2>
     <select id="targetSelect"></select>
-
     <h2>Propose une lettre</h2>
     <input type="text" id="letterInput" maxlength="1" placeholder="Lettre">
     <button id="guessBtn">Proposer</button>
-
     <div id="scores"></div>
     <div id="notepad"></div>
   </div>
-
   <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
   <script>
-    const socket = io();
-    const username = localStorage.getItem("username");
-
-    document.getElementById('guessBtn').onclick = () => {
-      const letter = document.getElementById('letterInput').value.toUpperCase().replace(/[^A-Z]/g, '');
-      const target = document.getElementById('targetSelect').value;
-      if (letter && target) {
-        socket.emit('guess_letter', {username, target, letter});
-        document.getElementById('letterInput').value = "";
-      }
+    const socket=io();
+    const username=localStorage.getItem("username");
+    document.getElementById('guessBtn').onclick=()=>{
+      const letter=document.getElementById('letterInput').value.toUpperCase().replace(/[^A-Z]/g,'');
+      const target=document.getElementById('targetSelect').value;
+      if(letter&&target){socket.emit('guess_letter',{username,target,letter});document.getElementById('letterInput').value="";}
     };
-
-    socket.on('update_turn', (player) => {
-      document.getElementById('turn').innerHTML = `🎯 Tour de ${player}`;
-      const myTurn = (player === username);
-      document.getElementById('letterInput').disabled = !myTurn;
-      document.getElementById('guessBtn').disabled = !myTurn;
-      document.getElementById('targetSelect').disabled = !myTurn;
+    document.getElementById('letterInput').addEventListener("keyup",(e)=>{if(e.key==="Enter"){document.getElementById('guessBtn').click();}});
+    socket.on('update_turn',(player)=>{
+      document.getElementById('turn').innerHTML=`🎯 Tour de ${player}`;
+      const myTurn=(player===username);
+      document.getElementById('letterInput').disabled=!myTurn;
+      document.getElementById('guessBtn').disabled=!myTurn;
+      document.getElementById('targetSelect').disabled=!myTurn;
     });
-
-    socket.on('update_players', (players) => {
-      let selectHtml = "";
-      let notepadHtml = "<h2>Bloc-notes</h2><table border='1'>";
-      for (let p in players) {
-        if (!players[p].eliminated) {
-          selectHtml += `<option value="${p}">${p}</option>`;
-        }
-        notepadHtml += `<tr><td>${p}</td>`;
-        let revealed = players[p].revealed;
-        for (let l of revealed) {
-          notepadHtml += `<td class="letter-box">${l}</td>`;
-        }
-        let diff = 18 - revealed.length;
-        for (let i=0; i<diff; i++) {
-          notepadHtml += `<td>-</td>`;
-        }
-        notepadHtml += "</tr>";
-      }
-      notepadHtml += "</table>";
-      document.getElementById('targetSelect').innerHTML = selectHtml;
-      document.getElementById('notepad').innerHTML = notepadHtml;
-    });
-
-    socket.on('update_scores', (scores) => {
-      let html = "<h2>Scores</h2>";
-      for (let p in scores) {
-        html += `<div>${p} : ${scores[p]} points</div>`;
-      }
-      document.getElementById('scores').innerHTML = html;
-    });
-
-    socket.on('player_eliminated', (player) => {
-      alert(`${player} a été éliminé !`);
-    });
-
-    socket.on('game_over', (scores) => {
-      let html = "<h2>Partie terminée !</h2>";
-      for (let p in scores) {
-        html += `<div>${p} : ${scores[p]} points</div>`;
-      }
-      document.getElementById('scores').innerHTML = html;
-    });
-  </script>
-</body>
-</html>
+    socket.on('update_players',(players)=>{
+      let selectHtml="";let notepadHtml="<h2>Bloc-notes</h2><table border='1'>";
+      for(let p in players){
+        if(!players

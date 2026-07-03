@@ -12,31 +12,22 @@
     <div id="players"></div>
     <button id="readyBtn">Je suis prêt</button>
   </div>
-
   <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
   <script>
     const socket = io();
-    let username = prompt("Ton pseudo ?").toUpperCase().replace(/[^A-Z]/g, '');
-    let country = prompt("Ton pays secret ?").toUpperCase().replace(/[^A-Z]/g, '');
+    let username = prompt("Ton pseudo ?").toUpperCase().replace(/[^A-Z]/g,'');
+    let country = prompt("Ton pays secret ?").toUpperCase().replace(/[^A-Z]/g,'');
     localStorage.setItem("username", username);
-
-    socket.emit('register', {username, country});
-
-    socket.on('update_players', (players) => {
-      let html = "<h2>Joueurs connectés</h2>";
-      for (let p in players) {
-        html += `<div class="player-card">${p} (${players[p].ready ? '✅' : '❌'}) - ${players[p].country.length} lettres</div>`;
+    socket.emit('register',{username,country});
+    socket.on('update_players',(players)=>{
+      let html="<h2>Joueurs connectés</h2>";
+      for(let p in players){
+        html+=`<div class="player-card">${p} (${players[p].ready?'✅':'❌'}) - ${players[p].country.length} lettres</div>`;
       }
-      document.getElementById('players').innerHTML = html;
+      document.getElementById('players').innerHTML=html;
     });
-
-    document.getElementById('readyBtn').onclick = () => {
-      socket.emit('set_ready', {username});
-    };
-
-    socket.on('game_start', () => {
-      window.location.href = "/game";
-    });
+    document.getElementById('readyBtn').onclick=()=>{socket.emit('set_ready',{username});};
+    socket.on('game_start',()=>{window.location.href="/game";});
   </script>
 </body>
 </html>

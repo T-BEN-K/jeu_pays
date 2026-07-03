@@ -1,7 +1,6 @@
 from flask import Flask, render_template
 from flask_socketio import SocketIO, emit
-import random
-import re
+import random, re
 
 app = Flask(__name__)
 socketio = SocketIO(app)
@@ -19,15 +18,12 @@ def index():
 def game():
     return render_template('game.html')
 
-# --- Inscription des joueurs ---
 @socketio.on('register')
 def register(data):
     username = re.sub(r'[^A-Z]', '', data['username'].upper())
     country = re.sub(r'[^A-Z]', '', data['country'].upper())
-
     if not username or not country:
         return
-
     players[username] = {
         'country': country,
         'revealed': ['_'] * len(country),
@@ -44,17 +40,15 @@ def set_ready(data):
     if username in players:
         players[username]['ready'] = True
         emit('update_players', players, broadcast=True)
-
     if len(players) >= 2 and all(p['ready'] for p in players.values()):
         start_game()
 
 def start_game():
     global turn_order, current_turn
-    turn_order = [p for p in players.keys() if not players[p]['eliminated']]
+    turn_order = [p for p in players if not players[p]['eliminated']]
     random.shuffle(turn_order)
     current_turn = turn_order[0]
     players[current_turn]['turn'] = True
-
     emit('game_start', broadcast=True)
     emit('update_turn', current_turn, broadcast=True)
     emit('update_scores', scores, broadcast=True)
@@ -63,38 +57,31 @@ def start_game():
 @socketio.on('guess_letter')
 def guess_letter(data):
     global current_turn
-    username = re.sub(r'[^A-Z]', '', data.get('username', '').upper())
-    target = re.sub(r'[^A-Z]', '', data.get('target', '').upper())
-    letter = re.sub(r'[^A-Z]', '', data.get('letter', '').upper())
-
+    username = re.sub(r'[^A-Z]', '', data.get('username','').upper())
+    target = re.sub(r'[^A-Z]', '', data.get('target','').upper())
+    letter = re.sub(r'[^A-Z]', '', data.get('letter','').upper())
     if not username or not target or not letter:
         return
     if target not in players or players[target]['eliminated']:
         return
     if username != current_turn:
-        return  # pas ton tour
-
+        return
     country = players[target]['country']
     revealed = players[target]['revealed']
-
     if letter in country:
-        for i, l in enumerate(country):
+        for i,l in enumerate(country):
             if l == letter:
                 revealed[i] = letter
         scores[username] += 1
-        emit('update_word', {'target': target, 'revealed': revealed}, broadcast=True)
+        emit('update_word', {'target':target,'revealed':revealed}, broadcast=True)
         emit('update_scores', scores, broadcast=True)
-
-        # Vérifier si le mot est entièrement découvert
         if ''.join(revealed) == country:
             players[target]['eliminated'] = True
-            scores[username] += 1  # bonus pour avoir découvert
+            scores[username] += 1
             emit('player_eliminated', target, broadcast=True)
             emit('update_scores', scores, broadcast=True)
-
-            # Vérifier si partie terminée
-            active_players = [p for p in players if not players[p]['eliminated']]
-            if len(active_players) <= 1:
+            active = [p for p in players if not players[p]['eliminated']]
+            if len(active) <= 1:
                 emit('game_over', scores, broadcast=True)
                 return
     else:
@@ -104,9 +91,8 @@ def next_turn():
     global current_turn
     idx = turn_order.index(current_turn)
     players[current_turn]['turn'] = False
-    # trouver prochain joueur non éliminé
-    for i in range(1, len(turn_order)+1):
-        candidate = turn_order[(idx + i) % len(turn_order)]
+    for i in range(1,len(turn_order)+1):
+        candidate = turn_order[(idx+i)%len(turn_order)]
         if not players[candidate]['eliminated']:
             current_turn = candidate
             players[current_turn]['turn'] = True
@@ -115,4 +101,3 @@ def next_turn():
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)
-
