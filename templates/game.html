@@ -8,28 +8,34 @@
 <body>
   <div class="container">
     <h1>🌍 Partie en cours</h1>
-    <div id="word"></div>
-    <div id="scores"></div>
     <div id="turn"></div>
 
-    <input type="text" id="letterInput" maxlength="1" placeholder="Devine une lettre">
+    <div id="players"></div>
+    <div id="scores"></div>
+    <div id="word"></div>
+
+    <input type="text" id="letterInput" maxlength="1" placeholder="Devine une lettre" style="font-size:20px; padding:10px;">
+    <input type="text" id="targetInput" placeholder="Pseudo du joueur ciblé" style="font-size:20px; padding:10px;">
     <button id="guessBtn">Proposer</button>
   </div>
 
   <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
   <script>
     const socket = io();
-    const username = prompt("Confirme ton pseudo");
+    const username = localStorage.getItem("username");
 
     document.getElementById('guessBtn').onclick = () => {
-      const letter = document.getElementById('letterInput').value;
-      socket.emit('guess_letter', {username, letter});
-      document.getElementById('letterInput').value = "";
+      const letter = document.getElementById('letterInput').value.toUpperCase().replace(/[^A-Z]/g, '');
+      const target = document.getElementById('targetInput').value.toUpperCase();
+      if (letter && target) {
+        socket.emit('guess_letter', {username, target, letter});
+        document.getElementById('letterInput').value = "";
+      }
     };
 
-    socket.on('update_word', (letters) => {
-      let html = "";
-      for (let l of letters) {
+    socket.on('update_word', (data) => {
+      let html = `<h2>Pays de ${data.target}</h2>`;
+      for (let l of data.revealed) {
         html += `<div class="letter-box">${l}</div>`;
       }
       document.getElementById('word').innerHTML = html;
@@ -46,7 +52,14 @@
     socket.on('update_turn', (player) => {
       document.getElementById('turn').innerHTML = `🎯 Tour de ${player}`;
     });
+
+    socket.on('update_players', (players) => {
+      let html = "<h2>Joueurs connectés</h2>";
+      for (let p in players) {
+        html += `<div class="player-card">${p} - ${players[p].country.length} lettres</div>`;
+      }
+      document.getElementById('players').innerHTML = html;
+    });
   </script>
 </body>
 </html>
-ാ㰊戯摯㹹਍⼼瑨汭ാ

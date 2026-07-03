@@ -16,14 +16,16 @@
   <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
   <script>
     const socket = io();
-    const username = prompt("Ton pseudo ?");
-    const country = prompt("Ton pays secret ?");
+    let username = prompt("Ton pseudo ?").toUpperCase();
+    let country = prompt("Ton pays secret ?").toUpperCase().replace(/[^A-Z]/g, '');
+    localStorage.setItem("username", username);
+
     socket.emit('register', {username, country});
 
     socket.on('update_players', (players) => {
-      let html = "";
+      let html = "<h2>Joueurs connectés</h2>";
       for (let p in players) {
-        html += `<div class="player-card">${p} (${players[p].ready ? '✅' : '❌'})</div>`;
+        html += `<div class="player-card">${p} (${players[p].ready ? '✅' : '❌'}) - ${players[p].country.length} lettres</div>`;
       }
       document.getElementById('players').innerHTML = html;
     });
@@ -33,9 +35,8 @@
     };
 
     socket.on('game_start', () => {
-      window.location.href = "/game"; // redirection vers la page de jeu
+      window.location.href = "/game";
     });
   </script>
 </body>
 </html>
-祤ാ㰊栯浴㹬਍

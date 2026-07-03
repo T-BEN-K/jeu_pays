@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit
 import random
+import re
 
 app = Flask(__name__)
 socketio = SocketIO(app)
@@ -18,10 +19,15 @@ def index():
 def game():
     return render_template('game.html')
 
+# --- Inscription des joueurs ---
 @socketio.on('register')
 def register(data):
-    username = data['username']
-    country = data['country'].upper()
+    username = data['username'].upper()
+    country = re.sub(r'[^A-Z]', '', data['country'].upper())  # force majuscule et lettres uniquement
+
+    if not username or not country:
+        return  # ignore si données invalides
+
     players[username] = {
         'country': country,
         'revealed': ['_'] * len(country),
@@ -33,11 +39,13 @@ def register(data):
 
 @socketio.on('set_ready')
 def set_ready(data):
-    username = data['username']
-    players[username]['ready'] = True
-    emit('update_players', players, broadcast=True)
+    username = data['username'].upper()
+    if username in players:
+        players[username]['ready'] = True
+        emit('update_players', players, broadcast=True)
 
-    if all(p['ready'] for p in players.values()) and len(players) > 1:
+    # Partie commence uniquement si au moins 2 joueurs
+    if len(players) >= 2 and all(p['ready'] for p in players.values()):
         start_game()
 
 def start_game():
@@ -50,23 +58,31 @@ def start_game():
     emit('game_start', broadcast=True)
     emit('update_turn', current_turn, broadcast=True)
     emit('update_scores', scores, broadcast=True)
+    emit('update_players', players, broadcast=True)
 
 @socketio.on('guess_letter')
 def guess_letter(data):
     global current_turn
-    username = data['username']
-    letter = data['letter'].upper()
+    username = data.get('username', '').upper()
+    target = data.get('target', '').upper()
+    letter = re.sub(r'[^A-Z]', '', data.get('letter', '').upper())
 
-    country = players[username]['country']
-    revealed = players[username]['revealed']
+    if not username or not target or not letter:
+        return  # ignore si données invalides
+    if target not in players:
+        return
+
+    country = players[target]['country']
+    revealed = players[target]['revealed']
 
     if letter in country:
         for i, l in enumerate(country):
             if l == letter:
                 revealed[i] = letter
         scores[username] += 1
-        emit('update_word', revealed, broadcast=True)
+        emit('update_word', {'target': target, 'revealed': revealed}, broadcast=True)
         emit('update_scores', scores, broadcast=True)
+        # le joueur garde la main
     else:
         next_turn()
 
