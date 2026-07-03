@@ -1,4 +1,4 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit
 import random
 
@@ -18,16 +18,13 @@ def index():
 def game():
     return render_template('game.html')
 
-# --- Gestion des joueurs ---
 @socketio.on('register')
 def register(data):
     username = data['username']
     country = data['country'].upper()
-
     players[username] = {
         'country': country,
         'revealed': ['_'] * len(country),
-        'alive': True,
         'ready': False,
         'turn': False
     }
@@ -40,11 +37,9 @@ def set_ready(data):
     players[username]['ready'] = True
     emit('update_players', players, broadcast=True)
 
-    # Vérifier si tous les joueurs sont prêts
     if all(p['ready'] for p in players.values()) and len(players) > 1:
         start_game()
 
-# --- Démarrage de la partie ---
 def start_game():
     global turn_order, current_turn
     turn_order = list(players.keys())
@@ -54,10 +49,8 @@ def start_game():
 
     emit('game_start', broadcast=True)
     emit('update_turn', current_turn, broadcast=True)
-    for username, data in players.items():
-        emit('update_word', data['revealed'], room=request.sid)
+    emit('update_scores', scores, broadcast=True)
 
-# --- Gestion des tours ---
 @socketio.on('guess_letter')
 def guess_letter(data):
     global current_turn
@@ -74,9 +67,7 @@ def guess_letter(data):
         scores[username] += 1
         emit('update_word', revealed, broadcast=True)
         emit('update_scores', scores, broadcast=True)
-        # Le joueur garde la main
     else:
-        # Passer au joueur suivant
         next_turn()
 
 def next_turn():
@@ -89,4 +80,3 @@ def next_turn():
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)
-
