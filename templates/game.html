@@ -8,33 +8,299 @@
 <body>
   <div class="container">
     <h1>🌍 Partie en cours</h1>
-    <div id="turn"></div>
-    <h2>Choisis un joueur cible</h2>
-    <select id="targetSelect"></select>
-    <h2>Propose une lettre</h2>
-    <input type="text" id="letterInput" maxlength="1" placeholder="Lettre">
-    <button id="guessBtn">Proposer</button>
-    <div id="scores"></div>
-    <div id="notepad"></div>
+    <div id="turn" class="status-panel">Chargement du tour...</div>
+      <div id="timer" class="status-panel">Temps restant : 00s</div>
+
+      <div class="game-grid">
+        <div class="card">
+          <h2>Choisis une cible</h2>
+          <select id="targetSelect" disabled></select>
+          <h2>Propose une lettre</h2>
+          <input type="text" id="letterInput" maxlength="1" placeholder="Lettre" autocomplete="off" disabled>
+          <button id="guessBtn" disabled>Proposer</button>
+          <button id="resetBtn" class="secondary-button">Réinitialiser la partie</button>
+          <div id="messageBox" class="message-box">En attente du tour ou du début de partie...</div>
+          <div class="chat-panel">
+            <h2>Chat</h2>
+            <div id="history" class="history-box"></div>
+            <input type="text" id="chatInput" placeholder="Message public" autocomplete="off" disabled>
+            <button id="sendChatBtn" disabled>Envoyer</button>
+          </div>
+        <h2>Scores</h2>
+        <div id="scores" class="scoreboard"></div>
+        <div id="revealedWords" class="revealed-words"></div>
+        <h2>État des joueurs</h2>
+        <div id="playersState" class="players-state"></div>
+      </div>
+    </div>
+
+    <div class="card notepad-card">
+      <h2>Bloc-notes</h2>
+      <div id="notepad" class="notepad"></div>
+    </div>
   </div>
+
   <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
   <script>
-    const socket=io();
-    const username=localStorage.getItem("username");
-    document.getElementById('guessBtn').onclick=()=>{
-      const letter=document.getElementById('letterInput').value.toUpperCase().replace(/[^A-Z]/g,'');
-      const target=document.getElementById('targetSelect').value;
-      if(letter&&target){socket.emit('guess_letter',{username,target,letter});document.getElementById('letterInput').value="";}
-    };
-    document.getElementById('letterInput').addEventListener("keyup",(e)=>{if(e.key==="Enter"){document.getElementById('guessBtn').click();}});
-    socket.on('update_turn',(player)=>{
-      document.getElementById('turn').innerHTML=`🎯 Tour de ${player}`;
-      const myTurn=(player===username);
-      document.getElementById('letterInput').disabled=!myTurn;
-      document.getElementById('guessBtn').disabled=!myTurn;
-      document.getElementById('targetSelect').disabled=!myTurn;
+    const socket = io();
+    const username = localStorage.getItem('username');
+    const country = localStorage.getItem('country');
+    if (!username || !country) {
+      window.location.href = '/';
+    }
+
+    let playersState = {};
+    let currentScores = {};
+
+    const targetSelect = document.getElementById('targetSelect');
+    const letterInput = document.getElementById('letterInput');
+    const guessBtn = document.getElementById('guessBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const chatInput = document.getElementById('chatInput');
+    const sendChatBtn = document.getElementById('sendChatBtn');
+    const turnLabel = document.getElementById('turn');
+    const timerLabel = document.getElementById('timer');
+    const scoresDiv = document.getElementById('scores');
+    const revealedWordsDiv = document.getElementById('revealedWords');
+    const playersStateDiv = document.getElementById('playersState');
+    const notepadDiv = document.getElementById('notepad');
+    const historyDiv = document.getElementById('history');
+    const messageBox = document.getElementById('messageBox');
+
+    function renderTurn(current) {
+      turnLabel.innerHTML = `🎯 Tour de ${current}`;
+      const isMyTurn = current === username;
+      letterInput.disabled = !isMyTurn;
+      guessBtn.disabled = !isMyTurn;
+      targetSelect.disabled = !isMyTurn;
+      if (isMyTurn) {
+        messageBox.textContent = 'C’est ton tour ! Choisis une cible et propose une lettre.';
+      }
+    }
+
+    function renderScores(players, scores) {
+      let html = '<table><tr><th>Joueur</th><th>Score</th><th>Pays</th></tr>';
+      for (const name in players) {
+        const info = players[name];
+        html += `<tr><td>${name}</td><td>${scores[name] || 0}</td><td>${info.country.length} lettres</td></tr>`;
+      }
+      html += '</table>';
+      scoresDiv.innerHTML = html;
+    }
+
+    function renderRevealedWords(players) {
+      let html = '<h3>Mots actuels</h3>';
+      html += '<ul>';
+      for (const name in players) {
+        const info = players[name];
+        html += `<li><strong>${name} :</strong> ${info.revealed.join(' ')}</li>`;
+      }
+      html += '</ul>';
+      revealedWordsDiv.innerHTML = html;
+    }
+
+    function renderPlayersState(players) {
+      let html = '';
+      for (const name in players) {
+        const info = players[name];
+        html += `<div class="player-card ${info.eliminated ? 'eliminated' : ''}">`;
+        html += `<strong>${name}${name === username ? ' (toi)' : ''}</strong><br>`;
+        html += `${info.eliminated ? 'Éliminé' : info.ready ? 'En jeu' : 'En attente'} • ${info.country.length} lettres`;
+        html += `</div>`;
+      }
+      playersStateDiv.innerHTML = html;
+    }
+
+    function updateChatAccess(players) {
+      const me = players[username];
+      const enabled = Boolean(me && !me.eliminated);
+      chatInput.disabled = !enabled;
+      sendChatBtn.disabled = !enabled;
+    }
+
+    function renderHistory(history) {
+      if (!history || !history.length) {
+        historyDiv.innerHTML = '<p>Aucune action pour l’instant.</p>';
+        return;
+      }
+      let html = '<ul>';
+      for (const item of history.slice(-20)) {
+        html += `<li>${item}</li>`;
+      }
+      html += '</ul>';
+      historyDiv.innerHTML = html;
+    }
+
+    function renderTargetList(players) {
+      const options = ['<option value="">-- Choisis une cible --</option>'];
+      for (const name in players) {
+        const info = players[name];
+        if (name !== username && !info.eliminated) {
+          options.push(`<option value="${name}">${name} (${info.country.length} lettres)</option>`);
+        }
+      }
+      targetSelect.innerHTML = options.join('');
+    }
+
+    function renderNotepad(players) {
+      const names = Object.keys(players);
+      if (!names.length) {
+        notepadDiv.innerHTML = '<p>En attente des joueurs...</p>';
+        return;
+      }
+      const maxLength = Math.max(...names.map(name => players[name].country.length));
+      let html = '<table class="notepad-table"><thead><tr><th>Joueur</th>';
+      for (let i = 1; i <= maxLength; i++) {
+        html += `<th>${i}</th>`;
+      }
+      html += '</tr></thead><tbody>';
+
+      for (const name of names) {
+        const info = players[name];
+        html += '<tr>';
+        html += `<td class="player-name">${name}${info.eliminated ? ' ✖' : ''}</td>`;
+        for (let pos = 0; pos < maxLength; pos++) {
+          if (pos < info.country.length) {
+            const letter = info.revealed[pos] || '_';
+            html += `<td class="letter-box">${letter}</td>`;
+          } else {
+            html += '<td class="letter-box empty">-</td>';
+          }
+        }
+        html += '</tr>';
+      }
+      html += '</tbody></table>';
+      notepadDiv.innerHTML = html;
+    }
+
+    function updateState(players, scores) {
+      playersState = players;
+      currentScores = scores || currentScores;
+      renderPlayersState(playersState);
+      updateChatAccess(playersState);
+      renderTargetList(playersState);
+      renderNotepad(playersState);
+      renderScores(playersState, currentScores);
+      renderRevealedWords(playersState);
+    }
+
+    function formatSeconds(value) {
+      return `${value}s`;
+    }
+
+    function setTimer(value) {
+      timerLabel.textContent = `Temps restant : ${formatSeconds(value)}`;
+    }
+
+    guessBtn.addEventListener('click', () => {
+      const letter = letterInput.value.toUpperCase().replace(/[^A-Z]/g, '');
+      const target = targetSelect.value;
+      if (!letter) {
+        messageBox.textContent = 'Choisis une lettre valide.';
+        return;
+      }
+      if (!target) {
+        messageBox.textContent = 'Sélectionne une cible avant de proposer.';
+        return;
+      }
+      socket.emit('guess_letter', { username, target, letter });
+      letterInput.value = '';
+      letterInput.focus();
     });
-    socket.on('update_players',(players)=>{
-      let selectHtml="";let notepadHtml="<h2>Bloc-notes</h2><table border='1'>";
-      for(let p in players){
-        if(!players
+
+    resetBtn.addEventListener('click', () => {
+      if (confirm('Réinitialiser la partie ? Tous les scores seront remis à zéro.')) {
+        socket.emit('reset_game', { username });
+      }
+    });
+
+    sendChatBtn.addEventListener('click', () => {
+      const text = chatInput.value.trim();
+      if (!text) {
+        return;
+      }
+      socket.emit('chat_message', { username, text });
+      chatInput.value = '';
+    });
+
+    letterInput.addEventListener('keyup', (event) => {
+      if (event.key === 'Enter') {
+        guessBtn.click();
+      }
+    });
+
+    socket.on('update_players', (players) => {
+      updateState(players, currentScores);
+    });
+
+    socket.on('update_timer', (data) => {
+      if (data && typeof data.value === 'number') {
+        setTimer(data.value);
+      }
+    });
+
+    socket.on('update_scores', (scores) => {
+      renderScores(playersState, scores);
+    });
+
+    socket.on('update_turn', (current) => {
+      renderTurn(current);
+    });
+
+    socket.on('update_history', (history) => {
+      renderHistory(history);
+    });
+
+    socket.on('chat_message', (data) => {
+      if (Array.isArray(data.history)) {
+        renderHistory(data.history);
+      }
+    });
+
+    socket.on('update_word', (data) => {
+      if (playersState[data.target]) {
+        playersState[data.target].revealed = data.revealed;
+        renderNotepad(playersState);
+      }
+    });
+
+    socket.on('player_eliminated', (data) => {
+      if (playersState[data.target]) {
+        playersState[data.target].eliminated = true;
+        renderPlayersState(playersState);
+        renderNotepad(playersState);
+      }
+      messageBox.textContent = `${data.target} est éliminé par ${data.by} !`;
+    });
+
+    socket.on('game_over', (data) => {
+      const best = Object.entries(data.scores || {}).sort((a, b) => b[1] - a[1])[0];
+      messageBox.textContent = `Fin de partie ! Vainqueur : ${best ? best[0] : 'inconnu'} (${best ? best[1] : 0} pts)`;
+      letterInput.disabled = true;
+      guessBtn.disabled = true;
+      targetSelect.disabled = true;
+    });
+
+    socket.on('game_reset', (data) => {
+      updateState(data.players, data.scores);
+      messageBox.textContent = 'Partie réinitialisée. Préparez-vous à repartir !';
+      letterInput.disabled = true;
+      guessBtn.disabled = true;
+      targetSelect.disabled = true;
+      chatInput.disabled = true;
+      sendChatBtn.disabled = true;
+      setTimer(0);
+    });
+
+    socket.on('message', (data) => {
+      messageBox.textContent = data.text;
+    });
+
+    socket.on('registration_failed', () => {
+      window.location.href = '/';
+    });
+
+    socket.emit('force_state', {});
+  </script>
+</body>
+</html>
