@@ -32,6 +32,7 @@ def index():
 def game():
     return render_template('game.html')
 
+
 def append_history(message):
     history.append(message)
     if len(history) > MAX_HISTORY:
@@ -174,14 +175,12 @@ def set_ready(data):
     if username not in players:
         return
     players[username]['ready'] = True
-    if players[username]['active']:
-        append_message(f'{username} est prêt.')
-    else:
-        append_message(f'{username} est prêt et attend la prochaine partie.')
+    append_message(f'{username} est prêt.')
     socketio.emit('update_players', players)
+
+    # Correction : on vérifie directement tous les joueurs
     if not game_active:
-        active_players = [p for p in players.values() if p['active']]
-        if len(active_players) >= 2 and all(p['ready'] for p in active_players):
+        if len(players) >= 2 and all(p['ready'] for p in players.values()):
             start_game()
 
 
@@ -213,7 +212,7 @@ def reset_game(data):
 def start_game():
     global turn_order, current_turn, game_active
     game_active = True
-    turn_order = [p for p in players if players[p]['active'] and not players[p]['eliminated']]
+    turn_order = [p for p in players if not players[p]['eliminated']]
     for p in turn_order:
         players[p]['status'] = 'en jeu'
     random.shuffle(turn_order)
@@ -264,14 +263,14 @@ def guess_letter(data):
         if found:
             scores[username] += 1
             append_message(f'{username} a trouvé {letter} sur {target} !')
-            emit('update_word', {'target': target, 'revealed': revealed})
-            emit('update_scores', scores)
+            socketio.emit('update_word', {'target': target, 'revealed': revealed})
+            socketio.emit('update_scores', scores)
             if ''.join(revealed) == country:
                 players[target]['eliminated'] = True
                 scores[username] += 1
                 append_message(f'{target} est éliminé(e) par {username} !')
-                emit('player_eliminated', {'target': target, 'by': username})
-                emit('update_scores', scores)
+                socketio.emit('player_eliminated', {'target': target, 'by': username})
+                socketio.emit('update_scores', scores)
                 if not next_turn():
                     return
         else:
@@ -331,7 +330,6 @@ def next_turn():
         socketio.emit('game_active', {'active': game_active})
         socketio.emit('update_players', players)
         set_timer(0)
-        # If waiting players are ready, start the next game automatically
         active_players = [p for p in players.values() if p['active']]
         if len(active_players) >= 2 and all(p['ready'] for p in active_players):
             start_game()
@@ -348,6 +346,7 @@ def next_turn():
     socketio.emit('update_players', players)
     set_timer(TURN_SECONDS)
     return True
+
 
 if __name__ == '__main__':
     socketio.start_background_task(timer_loop)
