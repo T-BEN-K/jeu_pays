@@ -25,30 +25,49 @@
       while (!country) {
         country = prompt('Ton pays secret ?').toUpperCase().replace(/[^A-Z]/g, '');
       }
-      localStorage.setItem('username', username);
-      localStorage.setItem('country', country);
+      sessionStorage.setItem('username', username);
+      sessionStorage.setItem('country', country);
       return { username, country };
     }
 
-    let username = localStorage.getItem('username');
-    let country = localStorage.getItem('country');
-    if (!username || !country) {
+    let username = sessionStorage.getItem('username');
+    let country = sessionStorage.getItem('country');
+
+    if (username && country) {
+      socket.emit('reconnect_player', { username, country });
+    } else {
       const info = askForPlayerInfo();
       username = info.username;
       country = info.country;
+      socket.emit('register', { username, country });
     }
 
     document.getElementById('status').textContent = `Connecté en tant que ${username}.`;
-    socket.emit('register', { username, country });
 
     socket.on('registration_failed', (data) => {
       alert(data.message);
-      localStorage.removeItem('username');
-      localStorage.removeItem('country');
+      sessionStorage.removeItem('username');
+      sessionStorage.removeItem('country');
       window.location.reload();
     });
 
+    socket.on('reconnect_failed', (data) => {
+      sessionStorage.removeItem('username');
+      sessionStorage.removeItem('country');
+      const info = askForPlayerInfo();
+      username = info.username;
+      country = info.country;
+      socket.emit('register', { username, country });
+    });
+
+    socket.on('reconnect_success', () => {
+      document.getElementById('status').textContent = `Reconnecté en tant que ${username}. En attente du lancement.`;
+      socket.emit('force_state', {});
+    });
+
+    let currentPlayers = {};
     socket.on('update_players', (players) => {
+      currentPlayers = players;
       let html = '<h2>Joueurs connectés</h2>';
       for (const p in players) {
         const player = players[p];
@@ -65,6 +84,12 @@
     };
 
     socket.on('game_start', () => { window.location.href = '/game'; });
+
+    socket.on('game_active', (data) => {
+      if (data && data.active && currentPlayers[username] && !currentPlayers[username].active) {
+        document.getElementById('status').textContent = 'Partie en cours, tu attends la prochaine manche.';
+      }
+    });
   </script>
 </body>
 </html>

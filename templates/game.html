@@ -43,11 +43,23 @@
   <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
   <script>
     const socket = io();
-    const username = localStorage.getItem('username');
-    const country = localStorage.getItem('country');
+    const username = sessionStorage.getItem('username');
+    const country = sessionStorage.getItem('country');
     if (!username || !country) {
       window.location.href = '/';
     }
+
+    socket.emit('reconnect_player', { username, country });
+
+    socket.on('reconnect_failed', () => {
+      sessionStorage.removeItem('username');
+      sessionStorage.removeItem('country');
+      window.location.href = '/';
+    });
+
+    socket.on('reconnect_success', () => {
+      socket.emit('force_state', {});
+    });
 
     let playersState = {};
     let currentScores = {};
