@@ -3,7 +3,7 @@ from flask_socketio import SocketIO, emit
 import random, re, threading, eventlet
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins='*')
+socketio = SocketIO(app, async_mode="gevent")
 
 players = {}
 scores = {}
@@ -11,6 +11,7 @@ turn_order = []
 current_turn = None
 history = []
 timer_value = 0
+timer_lock = threading.Lock()
 TURN_SECONDS = 20
 MAX_HISTORY = 50
 
