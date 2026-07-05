@@ -470,6 +470,11 @@
     });
 
     socket.emit('force_state', {});
+    window.addEventListener('beforeunload', () => {
+  if (username) {
+    socket.emit('leave_game', { username: username });
+  }
+});
   </script>
 </body>
 </html>

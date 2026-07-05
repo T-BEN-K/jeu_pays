@@ -3,7 +3,7 @@ from flask_socketio import SocketIO, emit
 import random, re, threading
 
 app = Flask(__name__)
-socketio = SocketIO(app, async_mode="gevent")
+socketio = SocketIO(app, async_mode="gevent", ping_timeout=5, ping_interval=2, cors_allowed_origins="*")
 
 players = {}
 scores = {}
@@ -117,7 +117,23 @@ def disconnect():
         
     if not username or username not in players:
         return
+    if not game_active:
+        # Si la partie n'a pas commencé, on le supprime complètement du salon
+        players.pop(username, None)
+        turn_order = [p for p in turn_order if p != username]
+        append_message(f'{username} a quitté le salon.')
+    else:
+        # Si la partie est en cours, on garde sa structure mais on le marque hors-jeu
+        leaving = players[username]
+        leaving['online'] = False
+        leaving['active'] = False
+        leaving['eliminated'] = True
+        leaving['status'] = 'hors ligne'
+        turn_order = [p for p in turn_order if p != username]
+        append_message(f'{username} est hors ligne et est éliminé(e).')
 
+    socketio.emit('update_players', players)
+    socketio.emit('update_scores', scores)
     leaving = players[username]
     leaving['online'] = False
     leaving['active'] = False
