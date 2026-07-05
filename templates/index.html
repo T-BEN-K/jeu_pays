@@ -75,14 +75,27 @@
       let u = '';
       let c = '';
       while (!u) {
-        u = prompt('Ton pseudo ?').toUpperCase().replace(/[^A-Z]/g, '');
+        const raw = prompt('Ton pseudo ?');
+        if (raw === null) {
+          return null;
+        }
+        u = raw.toUpperCase().replace(/[^A-Z]/g, '');
       }
       while (!c) {
-        c = prompt('Ton pays secret ?').toUpperCase().replace(/[^A-Z]/g, '');
+        const raw = prompt('Ton pays secret ?');
+        if (raw === null) {
+          return null;
+        }
+        c = raw.toUpperCase().replace(/[^A-Z]/g, '');
       }
       sessionStorage.setItem('username', u);
       sessionStorage.setItem('country', c);
       return { username: u, country: c };
+    }
+
+    function clearStoredSession() {
+      sessionStorage.removeItem('username');
+      sessionStorage.removeItem('country');
     }
 
     let username = sessionStorage.getItem('username');
@@ -92,6 +105,10 @@
       socket.emit('reconnect_player', { username, country });
     } else {
       const info = askForPlayerInfo();
+      if (!info) {
+        clearStoredSession();
+        throw new Error('Informations manquantes.');
+      }
       username = info.username;
       country = info.country;
       socket.emit('register', { username, country });
@@ -338,15 +355,17 @@
     // --- ENTRÉES SOCKET.IO ---
     socket.on('registration_failed', (data) => {
       alert(data ? data.message : "Inscription échouée.");
-      sessionStorage.removeItem('username');
-      sessionStorage.removeItem('country');
+      clearStoredSession();
       window.location.reload();
     });
 
-    socket.on('reconnect_failed', () => {
-      sessionStorage.removeItem('username');
-      sessionStorage.removeItem('country');
+    socket.on('reconnect_failed', (data) => {
+      clearStoredSession();
       const info = askForPlayerInfo();
+      if (!info) {
+        window.location.reload();
+        return;
+      }
       username = info.username;
       country = info.country;
       socket.emit('register', { username, country });
@@ -487,10 +506,10 @@
 
     socket.emit('force_state', {});
     window.addEventListener('beforeunload', () => {
-  if (username) {
-    socket.emit('leave_game', { username: username });
-  }
-});
+      if (username) {
+        socket.emit('leave_game', { username: username });
+      }
+    });
   </script>
 </body>
 </html>

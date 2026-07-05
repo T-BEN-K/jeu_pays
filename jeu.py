@@ -204,7 +204,10 @@ def force_state(data):
 def reconnect_player(data):
     username = sanitize(data.get('username', ''))
     country = sanitize(data.get('country', ''))
-    if not username or username not in players or players[username]['country'] != country:
+    if not username or not country:
+        emit('reconnect_failed', {'message': 'Pseudo ou pays manquant.'})
+        return
+    if username not in players or players[username]['country'] != country:
         emit('reconnect_failed', {'message': 'Impossible de reprendre la partie. Retour à l’accueil.'})
         return
     if username in username_to_sid and username_to_sid[username] != request.sid:
@@ -234,7 +237,7 @@ def register(data):
     username = sanitize(data.get('username', ''))
     country = sanitize(data.get('country', ''))
     if not username or not country or len(country) < 2:
-        emit('registration_failed', {'message': 'Pseudo ou pays invalide ou pseudo déjà utilisé.'})
+        emit('registration_failed', {'message': 'Pseudo ou pays invalide.'})
         return
     if username in players:
         emit('registration_failed', {'message': 'Pseudo déjà utilisé ou reconnecte-toi si tu es déjà inscrit.'})
