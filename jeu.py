@@ -178,8 +178,8 @@ def disconnect():
         return
 
     if game_active:
-        remove_player(username, permanent=False)
-        append_message(f'{username} est hors ligne et est éliminé(e).')
+        remove_player(username, permanent=True)
+        append_message(f'{username} est hors ligne et a été supprimé(e) du serveur.')
     else:
         remove_player(username, permanent=True)
         append_message(f'{username} a quitté le salon.')
@@ -203,7 +203,7 @@ def leave_game(data):
     if not username or username not in players:
         return
     if game_active:
-        remove_player(username, permanent=False)
+        remove_player(username, permanent=True)
     else:
         remove_player(username, permanent=True)
     socketio.emit('update_players', players)
