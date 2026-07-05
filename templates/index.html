@@ -84,6 +84,12 @@
       authMessage.style.color = isError ? '#b00020' : '#1f6f3f';
     }
 
+    function setAuthVisible(visible) {
+      const authPanel = document.getElementById('authPanel');
+      if (!authPanel) return;
+      authPanel.style.display = visible ? 'flex' : 'none';
+    }
+
     function clearStoredSession() {
       sessionStorage.removeItem('username');
       sessionStorage.removeItem('country');
@@ -111,11 +117,13 @@
       const storedUsername = sessionStorage.getItem('username');
       const storedCountry = sessionStorage.getItem('country');
       if (!storedUsername || !storedCountry) {
+        setAuthVisible(true);
         setAuthMessage('Saisis ton pseudo et ton pays pour rejoindre le salon.');
         return;
       }
       username = storedUsername;
       country = storedCountry;
+      setAuthVisible(false);
       setAuthMessage('Connexion en cours…');
       socket.emit('reconnect_player', { username, country });
     }
@@ -126,6 +134,7 @@
     if (username && country) {
       connectWithStoredInfo();
     } else {
+      setAuthVisible(true);
       setAuthMessage('Saisis ton pseudo et ton pays pour rejoindre le salon.');
     }
 
@@ -301,6 +310,7 @@
       persistPlayerInfo(info);
       username = info.username;
       country = info.country;
+      setAuthVisible(false);
       setAuthMessage('Connexion en cours…');
       socket.emit('register', { username, country });
     });
@@ -395,6 +405,7 @@
       clearStoredSession();
       username = '';
       country = '';
+      setAuthVisible(true);
       setAuthMessage(data ? data.message : 'Inscription échouée.', true);
       document.getElementById('status').textContent = 'Connexion impossible. Réessaie avec un pseudo et un pays valides.';
     });
@@ -403,12 +414,14 @@
       clearStoredSession();
       username = '';
       country = '';
+      setAuthVisible(true);
       setAuthMessage(data ? data.message : 'Reconnexion impossible.', true);
       document.getElementById('status').textContent = 'Connexion impossible. Réessaie avec un pseudo et un pays valides.';
     });
 
     socket.on('reconnect_success', () => {
       document.getElementById('status').textContent = `Reconnecté en tant que ${username}.`;
+      setAuthVisible(false);
       setAuthMessage(`Reconnecté en tant que ${username}.`);
       socket.emit('force_state', {});
     });
