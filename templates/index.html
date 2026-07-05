@@ -28,7 +28,11 @@
           <select id="targetSelect" disabled></select>
           <h2>Propose une lettre</h2>
           <input type="text" id="letterInput" maxlength="1" placeholder="Lettre" autocomplete="off" disabled>
-          <button id="guessBtn" disabled>Proposer</button>
+          <button id="guessBtn" disabled>Proposer la lettre</button>
+
+          <h2>Propose un pays</h2>
+          <input type="text" id="countryInput" maxlength="30" placeholder="Pays" autocomplete="off" disabled>
+          <button id="guessCountryBtn" disabled>Proposer le pays</button>
           <button id="resetBtn" class="secondary-button">Réinitialiser la partie</button>
           <div id="messageBox" class="message-box">En attente du tour ou du début de partie...</div>
           
@@ -96,6 +100,8 @@
     const targetSelect = document.getElementById('targetSelect');
     const letterInput = document.getElementById('letterInput');
     const guessBtn = document.getElementById('guessBtn');
+    const countryInput = document.getElementById('countryInput');
+    const guessCountryBtn = document.getElementById('guessCountryBtn');
     const resetBtn = document.getElementById('resetBtn');
     const chatInput = document.getElementById('chatInput');
     const sendChatBtn = document.getElementById('sendChatBtn');
@@ -116,9 +122,11 @@
       const isMyTurn = current === username;
       letterInput.disabled = !isMyTurn;
       guessBtn.disabled = !isMyTurn;
+      countryInput.disabled = !isMyTurn;
+      guessCountryBtn.disabled = !isMyTurn;
       targetSelect.disabled = !isMyTurn;
       if (isMyTurn) {
-        messageBox.textContent = 'C’est ton tour ! Choisis une cible et propose une lettre.';
+        messageBox.textContent = 'C’est ton tour ! Choisis une cible et propose une lettre ou un pays.';
       }
     }
 
@@ -126,7 +134,7 @@
       let html = '<table><tr><th>Joueur</th><th>Score</th><th>Pays</th></tr>';
       for (const name in players) {
         const info = players[name];
-        html += `<tr><td>${name}</td><td>${scores[name] || 0}</td><td>${info.country.length} lettres</td></tr>`;
+        html += `<tr><td>${name.toUpperCase()}</td><td>${scores[name] || 0}</td><td>${info.country.toUpperCase()}</td></tr>`;
       }
       html += '</table>';
       scoresDiv.innerHTML = html;
@@ -147,8 +155,8 @@
       for (const name in players) {
         const info = players[name];
         html += `<div class="player-card ${info.eliminated ? 'eliminated' : ''}">`;
-        html += `<strong>${name}${name === username ? ' (toi)' : ''}</strong><br>`;
-        html += `${info.eliminated ? 'Éliminé' : info.ready ? 'En jeu' : 'En attente'} • ${info.country.length} lettres`;
+        html += `<strong>${name.toUpperCase()}${name === username ? ' (TOI)' : ''}</strong><br>`;
+        html += `${info.eliminated ? 'ÉLIMINÉ' : info.ready ? 'EN JEU' : 'EN ATTENTE'} • ${info.country.length} LETTRES`;
         html += `</div>`;
       }
       playersStateDiv.innerHTML = html;
@@ -263,6 +271,22 @@
       letterInput.focus();
     });
 
+    guessCountryBtn.addEventListener('click', () => {
+      const country = countryInput.value.toUpperCase().replace(/[^A-Z]/g, '');
+      const target = targetSelect.value;
+      if (!country) {
+        messageBox.textContent = 'Écris un pays valide.';
+        return;
+      }
+      if (!target) {
+        messageBox.textContent = 'Sélectionne une cible avant de proposer un pays.';
+        return;
+      }
+      socket.emit('guess_country', { username, target, country });
+      countryInput.value = '';
+      countryInput.focus();
+    });
+
     resetBtn.addEventListener('click', () => {
       if (confirm('Réinitialiser la partie ? Tous les scores seront remis à zéro.')) {
         socket.emit('reset_game', { username });
@@ -278,6 +302,10 @@
 
     letterInput.addEventListener('keyup', (event) => {
       if (event.key === 'Enter') guessBtn.click();
+    });
+
+    countryInput.addEventListener('keyup', (event) => {
+      if (event.key === 'Enter') guessCountryBtn.click();
     });
 
     // --- ENTRÉES SOCKET.IO ---
@@ -364,10 +392,21 @@
     });
 
     socket.on('game_over', (data) => {
-      const best = Object.entries(data.scores || {}).sort((a, b) => b[1] - a[1])[0];
-      messageBox.textContent = `Fin de partie ! Vainqueur : ${best ? best[0] : 'inconnu'} (${best ? best[1] : 0} pts)`;
+      const ranking = Array.isArray(data.ranking) ? data.ranking : Object.entries(data.scores || {}).sort((a, b) => b[1] - a[1]).map(([name, score]) => ({ name, score, country: currentPlayers[name]?.country || '' }));
+      const rankingHtml = ranking.map((entry, index) => `<li>${index + 1}. ${entry.name.toUpperCase()} — ${entry.score} POINT${entry.score > 1 ? 'S' : ''}</li>`).join('');
+      const countriesHtml = ranking.map((entry) => `<li>${entry.name.toUpperCase()} : ${entry.country.toUpperCase()}</li>`).join('');
+      messageBox.innerHTML = `
+        <div class="game-over-card">
+          <div class="game-over-title">FIN DE PARTIE</div>
+          <div><strong>CLASSEMENT</strong></div>
+          <ul class="ranking-list">${rankingHtml}</ul>
+          <div style="margin-top:10px;"><strong>PAYS DES JOUEURS</strong></div>
+          <ul class="country-list">${countriesHtml}</ul>
+        </div>`;
       letterInput.disabled = true;
+      countryInput.disabled = true;
       guessBtn.disabled = true;
+      guessCountryBtn.disabled = true;
       targetSelect.disabled = true;
     });
 
@@ -375,7 +414,9 @@
       updateState(data.players, data.scores);
       messageBox.textContent = 'Partie réinitialisée. Préparez-vous à repartir !';
       letterInput.disabled = true;
+      countryInput.disabled = true;
       guessBtn.disabled = true;
+      guessCountryBtn.disabled = true;
       targetSelect.disabled = true;
       chatInput.disabled = true;
       sendChatBtn.disabled = true;

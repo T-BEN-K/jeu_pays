@@ -3,7 +3,7 @@ from flask_socketio import SocketIO, emit
 import random, re, threading
 
 app = Flask(__name__)
-socketio = SocketIO(app, async_mode="gevent")
+socketio = SocketIO(app, async_mode="threading")
 
 players = {}
 scores = {}
@@ -15,12 +15,27 @@ username_to_sid = {}
 history = []
 timer_value = 0
 timer_lock = threading.RLock()
-TURN_SECONDS = 20
+TURN_SECONDS = 30
 MAX_HISTORY = 50
 
 
 def sanitize(text):
     return re.sub(r'[^A-Z]', '', text.upper() if isinstance(text, str) else '')
+
+
+def build_game_over_payload():
+    ranking = sorted(
+        (
+            {
+                'name': name,
+                'score': scores.get(name, 0),
+                'country': players.get(name, {}).get('country', '')
+            }
+            for name in players
+        ),
+        key=lambda item: (-item['score'], item['name'])
+    )
+    return {'scores': scores, 'players': players, 'ranking': ranking}
 
 
 @app.route('/')
@@ -101,7 +116,7 @@ def disconnect():
             append_message('Il ne reste plus qu’un joueur, fin de la partie.')
             game_active = False
             socketio.emit('game_active', {'active': game_active})
-            socketio.emit('game_over', {'scores': scores})
+            socketio.emit('game_over', build_game_over_payload())
 
 
 @socketio.on('force_state')
@@ -265,9 +280,9 @@ def guess_letter(data):
             append_message(f'{username} a trouvé {letter} sur {target} !')
             socketio.emit('update_word', {'target': target, 'revealed': revealed})
             socketio.emit('update_scores', scores)
+            set_timer(TURN_SECONDS)
             if ''.join(revealed) == country:
                 players[target]['eliminated'] = True
-                scores[username] += 1
                 append_message(f'{target} est éliminé(e) par {username} !')
                 socketio.emit('player_eliminated', {'target': target, 'by': username})
                 socketio.emit('update_scores', scores)
@@ -278,6 +293,40 @@ def guess_letter(data):
             next_turn()
     else:
         append_message(f'{letter} n’est pas dans le mot de {target}.')
+        next_turn()
+
+
+@socketio.on('guess_country')
+def guess_country(data):
+    username = sanitize(data.get('username', ''))
+    target = sanitize(data.get('target', ''))
+    proposal = sanitize(data.get('country', ''))
+    if not username or not target or not proposal:
+        return
+    if username not in players or players[username]['eliminated']:
+        emit('message', {'text': 'Ton joueur est éliminé ou introuvable.'}, to=request.sid)
+        return
+    if target not in players or players[target]['eliminated']:
+        emit('message', {'text': 'Cible invalide ou déjà éliminée.'}, to=request.sid)
+        return
+    if username == target:
+        emit('message', {'text': 'Tu dois choisir un autre joueur.'}, to=request.sid)
+        return
+    if username != current_turn:
+        emit('message', {'text': 'Ce n’est pas ton tour.'}, to=request.sid)
+        return
+
+    actual_country = players[target]['country']
+    if proposal == actual_country:
+        players[target]['eliminated'] = True
+        scores[username] += 1
+        append_message(f'{username} a correctement proposé {proposal} pour {target} !')
+        socketio.emit('player_eliminated', {'target': target, 'by': username, 'by_country': True})
+        socketio.emit('update_scores', scores)
+        if not next_turn():
+            return
+    else:
+        append_message(f'La proposition {proposal} pour {target} n’était pas la bonne.')
         next_turn()
 
 
@@ -321,7 +370,7 @@ def next_turn():
     active = [p for p in turn_order if p in players and not players[p]['eliminated']]
     if len(active) <= 1:
         append_message('Partie terminée.')
-        socketio.emit('game_over', {'scores': scores})
+        socketio.emit('game_over', build_game_over_payload())
         activate_waiting_players()
         for p in players:
             players[p]['turn'] = False

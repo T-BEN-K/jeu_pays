@@ -9,6 +9,10 @@ body {
   background-size: cover;
 }
 
+strong {
+  color: #ffe066;
+}
+
 .container {
   width: min(1180px, calc(100% - 40px));
   margin: 30px auto;
@@ -197,6 +201,43 @@ button:disabled {
   border: 1px solid rgba(255, 255, 255, 0.12);
   min-height: 60px;
   color: #fff;
+  line-height: 1.5;
+}
+
+.game-over-card {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.18), rgba(255, 179, 71, 0.12));
+  border: 1px solid rgba(255, 224, 102, 0.35);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+}
+
+.game-over-title {
+  font-size: 1.1rem;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.ranking-list,
+.country-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.ranking-list li,
+.country-list li {
+  margin-bottom: 6px;
+}
+
+.scoreboard table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.scoreboard td,
+.scoreboard th {
+  text-transform: uppercase;
 }
 
 @media (max-width: 900px) {
