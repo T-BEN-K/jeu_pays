@@ -69,9 +69,15 @@ def connect():
 @socketio.on('disconnect')
 def disconnect():
     global current_turn, turn_order, game_active
-    username = sid_to_username.pop(request.sid, None)
+
+    sid = getattr(request, 'sid', None)
+    if not sid:
+        return
+    
+    username = sid_to_username.pop(sid, None)
     if username:
         username_to_sid.pop(username, None)
+        
     if not username or username not in players:
         return
 
@@ -307,7 +313,7 @@ def timer_loop():
             if timer_value <= 0:
                 append_message(f'Le temps est écoulé pour {current_turn}. Tour suivant.')
                 next_turn()
-
+socketio.start_background_task(timer_loop)
 
 def activate_waiting_players():
     for p in players.values():
