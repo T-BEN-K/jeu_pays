@@ -14,6 +14,7 @@
       <p id="status">Entrez un pseudo et votre pays secret pour commencer.</p>
       <div id="players"></div>
       <button id="readyBtn" disabled>Je suis prêt</button>
+      <button id="clearLobbyBtn" class="secondary-button" style="display:none;">Vider la liste</button>
     </div>
 
     <!-- 2. ÉCRAN DE JEU (Masqué au départ, s'affichera au lancement) -->
@@ -103,6 +104,7 @@
     const countryInput = document.getElementById('countryInput');
     const guessCountryBtn = document.getElementById('guessCountryBtn');
     const resetBtn = document.getElementById('resetBtn');
+    const clearLobbyBtn = document.getElementById('clearLobbyBtn');
     const chatInput = document.getElementById('chatInput');
     const replayBtnId = 'replayBtn';
     const sendChatBtn = document.getElementById('sendChatBtn');
@@ -163,12 +165,19 @@
     }
 
     function renderLobbyPlayers(players) {
+      const visiblePlayers = Object.entries(players).filter(([, player]) => player && player.online !== false);
       let html = '<h2>Joueurs connectés</h2>';
-      for (const p in players) {
-        const player = players[p];
-        html += `<div class="player-card">${p}${p === username ? ' (toi)' : ''} - ${player.country.length} lettres - ${player.ready ? '✅ prêt' : '⏳ en attente'}</div>`;
+      if (!visiblePlayers.length) {
+        html += '<div class="player-card">Aucun joueur en ligne.</div>';
+      } else {
+        for (const [p, player] of visiblePlayers) {
+          html += `<div class="player-card">${p}${p === username ? ' (toi)' : ''} - ${player.country.length} lettres - ${player.ready ? '✅ prêt' : '⏳ en attente'}</div>`;
+        }
       }
       document.getElementById('players').innerHTML = html;
+      const isLobbyVisible = document.getElementById('lobby-screen').style.display !== 'none';
+      const canClear = isLobbyVisible && visiblePlayers.length > 1 && visiblePlayers[0] && visiblePlayers[0][0] === username;
+      clearLobbyBtn.style.display = canClear ? 'block' : 'none';
     }
 
     function updateChatAccess(players) {
@@ -290,6 +299,12 @@
     resetBtn.addEventListener('click', () => {
       if (confirm('Réinitialiser la partie ? Tous les scores seront remis à zéro.')) {
         socket.emit('reset_game', { username });
+      }
+    });
+
+    clearLobbyBtn.addEventListener('click', () => {
+      if (confirm('Vider le salon ? Tous les autres joueurs seront retirés.')) {
+        socket.emit('clear_lobby', { username });
       }
     });
 
@@ -447,6 +462,7 @@
 
     socket.on('game_reset', (data) => {
       updateState(data.players, data.scores);
+      renderLobbyPlayers(data.players);
       if (document.getElementById(replayBtnId)) {
         document.getElementById(replayBtnId).remove();
       }

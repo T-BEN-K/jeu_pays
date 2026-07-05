@@ -38,6 +38,45 @@ def build_game_over_payload():
     return {'scores': scores, 'players': players, 'ranking': ranking}
 
 
+def remove_player(username, permanent=False):
+    global current_turn, turn_order
+    if username not in players:
+        return False
+    if permanent:
+        players.pop(username, None)
+        scores.pop(username, None)
+        turn_order = [p for p in turn_order if p != username]
+        if username in username_to_sid:
+            sid = username_to_sid.pop(username)
+            sid_to_username.pop(sid, None)
+    else:
+        player = players[username]
+        player['online'] = False
+        player['active'] = False
+        player['eliminated'] = True
+        player['status'] = 'hors ligne'
+        turn_order = [p for p in turn_order if p != username]
+    if current_turn == username:
+        current_turn = None
+    return True
+
+
+def cleanup_lobby_players():
+    removed = []
+    for name in list(players.keys()):
+        if not game_active and not players[name].get('online', True):
+            remove_player(name, permanent=True)
+            removed.append(name)
+    return removed
+
+
+def get_lobby_owner():
+    for name in players:
+        if players[name].get('online', True):
+            return name
+    return None
+
+
 def get_competing_players():
     return [
         name for name in turn_order
@@ -110,44 +149,24 @@ def disconnect():
     sid = getattr(request, 'sid', None)
     if not sid:
         return
-    
+
     username = sid_to_username.pop(sid, None)
     if username:
         username_to_sid.pop(username, None)
-        
+
     if not username or username not in players:
         return
-    if not game_active:
-        # Si la partie n'a pas commencé, on le supprime complètement du salon
-        players.pop(username, None)
-        turn_order = [p for p in turn_order if p != username]
-        append_message(f'{username} a quitté le salon.')
-    else:
-        # Si la partie est en cours, on garde sa structure mais on le marque hors-jeu
-        leaving = players[username]
-        leaving['online'] = False
-        leaving['active'] = False
-        leaving['eliminated'] = True
-        leaving['status'] = 'hors ligne'
-        turn_order = [p for p in turn_order if p != username]
-        append_message(f'{username} est hors ligne et est éliminé(e).')
-
-    socketio.emit('update_players', players)
-    socketio.emit('update_scores', scores)
-    leaving = players[username]
-    leaving['online'] = False
-    leaving['active'] = False
-    leaving['eliminated'] = True
-    leaving['status'] = 'hors ligne'
-    turn_order = [p for p in turn_order if p != username]
 
     if game_active:
+        remove_player(username, permanent=False)
         append_message(f'{username} est hors ligne et est éliminé(e).')
     else:
-        append_message(f'{username} est hors ligne.')
+        remove_player(username, permanent=True)
+        append_message(f'{username} a quitté le salon.')
 
     socketio.emit('update_players', players)
     socketio.emit('update_scores', scores)
+
     if game_active:
         remaining = get_competing_players()
         if len(remaining) <= 1:
@@ -156,6 +175,19 @@ def disconnect():
             return
         if username == current_turn or current_turn not in players or players.get(current_turn, {}).get('eliminated', True):
             next_turn()
+
+
+@socketio.on('leave_game')
+def leave_game(data):
+    username = sanitize(data.get('username', ''))
+    if not username or username not in players:
+        return
+    if game_active:
+        remove_player(username, permanent=False)
+    else:
+        remove_player(username, permanent=True)
+    socketio.emit('update_players', players)
+    socketio.emit('update_scores', scores)
 
 
 @socketio.on('force_state')
@@ -244,12 +276,30 @@ def set_ready(data):
             start_game()
 
 
+@socketio.on('clear_lobby')
+def clear_lobby(data):
+    username = sanitize(data.get('username', ''))
+    if not username or username not in players:
+        return
+    owner = get_lobby_owner()
+    if owner != username:
+        emit('message', {'text': 'Seul le premier joueur connecté peut vider le salon.'}, to=request.sid)
+        return
+    for name in list(players.keys()):
+        if name != username:
+            remove_player(name, permanent=True)
+    append_message(f'{username} a vidé le salon, il ne reste que lui.')
+    socketio.emit('update_players', players)
+    socketio.emit('update_scores', scores)
+
+
 @socketio.on('reset_game')
 def reset_game(data):
     global turn_order, current_turn, scores, game_active
     username = sanitize(data.get('username', ''))
     if username not in players:
         return
+    cleanup_lobby_players()
     game_active = False
     for p in players:
         players[p]['revealed'] = ['_'] * len(players[p]['country'])
