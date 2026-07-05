@@ -125,7 +125,7 @@ def disconnect():
     leaving['status'] = 'hors ligne'
     turn_order = [p for p in turn_order if p != username]
 
-    if game_active and not leaving['eliminated']:
+    if game_active:
         append_message(f'{username} est hors ligne et est éliminé(e).')
     else:
         append_message(f'{username} est hors ligne.')
@@ -310,11 +310,9 @@ def guess_letter(data):
             socketio.emit('update_word', {'target': target, 'revealed': revealed})
             set_timer(TURN_SECONDS)
             if ''.join(revealed) == country:
-                players[target]['eliminated'] = True
-                append_message(f'{target} est éliminé(e) par {username} !')
-                socketio.emit('player_eliminated', {'target': target, 'by': username})
-                if not next_turn():
-                    return
+                append_message(f'Les lettres de {target} sont maintenant complètes, mais le pays n’est validé que par une proposition.')
+                next_turn()
+                return
         else:
             append_message(f'{letter} ne révèle rien de nouveau pour {target}.')
             next_turn()
@@ -399,9 +397,6 @@ def next_turn():
     if len(active) <= 1:
         activate_waiting_players()
         finish_game()
-        active_players = [p for p in players.values() if p['active']]
-        if len(active_players) >= 2 and all(p['ready'] for p in active_players):
-            start_game()
         return False
     if current_turn not in active:
         current_turn = active[0]
