@@ -2,3 +2,4 @@ flask
 flask-socketio
 simple-websocket
 gunicorn
+eventlet==0.33.3
