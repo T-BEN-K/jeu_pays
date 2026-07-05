@@ -240,6 +240,28 @@ def register(data):
         emit('registration_failed', {'message': 'Pseudo ou pays invalide.'})
         return
     if username in players:
+        existing = players[username]
+        if existing.get('country') == country and not existing.get('online', True):
+            existing.update({
+                'country': country,
+                'revealed': existing.get('revealed') or ['_'] * len(country),
+                'ready': False,
+                'turn': False,
+                'eliminated': False,
+                'active': not game_active,
+                'online': True,
+                'status': 'en attente' if not game_active else 'en attente de prêt',
+                'eliminations': existing.get('eliminations', 0)
+            })
+            scores[username] = scores.get(username, 0)
+            sid_to_username[request.sid] = username
+            username_to_sid[username] = request.sid
+            append_message(f'{username} a rejoint la partie.')
+            socketio.emit('update_players', players)
+            socketio.emit('game_active', {'active': game_active}, to=request.sid)
+            if not game_active:
+                socketio.emit('message', {'text': f'{username} est arrivé(e) et attend la fin de la partie en cours.'}, to=request.sid)
+            return
         emit('registration_failed', {'message': 'Pseudo déjà utilisé ou reconnecte-toi si tu es déjà inscrit.'})
         return
     active = not game_active

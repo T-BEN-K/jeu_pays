@@ -12,6 +12,12 @@
     <div id="lobby-screen">
       <h1>🌍 Bienvenue au Jeu des Pays</h1>
       <p id="status">Entrez un pseudo et votre pays secret pour commencer.</p>
+      <div id="authPanel" class="auth-panel">
+        <input type="text" id="usernameInput" maxlength="12" placeholder="Pseudo" autocomplete="username">
+        <input type="text" id="countryInput" maxlength="30" placeholder="Pays" autocomplete="off">
+        <button id="connectBtn">Se connecter</button>
+        <div id="authMessage" class="message-box"></div>
+      </div>
       <div id="players"></div>
       <button id="readyBtn" disabled>Je suis prêt</button>
       <button id="clearLobbyBtn" class="secondary-button" style="display:none;">Vider la liste</button>
@@ -71,26 +77,11 @@
     let playersState = {};
     let currentScores = {};
 
-    function askForPlayerInfo() {
-      let u = '';
-      let c = '';
-      while (!u) {
-        const raw = prompt('Ton pseudo ?');
-        if (raw === null) {
-          return null;
-        }
-        u = raw.toUpperCase().replace(/[^A-Z]/g, '');
-      }
-      while (!c) {
-        const raw = prompt('Ton pays secret ?');
-        if (raw === null) {
-          return null;
-        }
-        c = raw.toUpperCase().replace(/[^A-Z]/g, '');
-      }
-      sessionStorage.setItem('username', u);
-      sessionStorage.setItem('country', c);
-      return { username: u, country: c };
+    function setAuthMessage(message, isError = false) {
+      const authMessage = document.getElementById('authMessage');
+      if (!authMessage) return;
+      authMessage.textContent = message;
+      authMessage.style.color = isError ? '#b00020' : '#1f6f3f';
     }
 
     function clearStoredSession() {
@@ -98,24 +89,49 @@
       sessionStorage.removeItem('country');
     }
 
+    function readEnteredPlayerInfo() {
+      const usernameInput = document.getElementById('usernameInput');
+      const countryInput = document.getElementById('countryInput');
+      const rawUser = (usernameInput?.value || '').trim().toUpperCase().replace(/[^A-Z]/g, '');
+      const rawCountry = (countryInput?.value || '').trim().toUpperCase().replace(/[^A-Z]/g, '');
+      if (!rawUser || !rawCountry || rawCountry.length < 2) {
+        setAuthMessage('Entre un pseudo et un pays valide (2 lettres minimum).', true);
+        return null;
+      }
+      return { username: rawUser, country: rawCountry };
+    }
+
+    function persistPlayerInfo(info) {
+      if (!info) return;
+      sessionStorage.setItem('username', info.username);
+      sessionStorage.setItem('country', info.country);
+    }
+
+    function connectWithStoredInfo() {
+      const storedUsername = sessionStorage.getItem('username');
+      const storedCountry = sessionStorage.getItem('country');
+      if (!storedUsername || !storedCountry) {
+        setAuthMessage('Saisis ton pseudo et ton pays pour rejoindre le salon.');
+        return;
+      }
+      username = storedUsername;
+      country = storedCountry;
+      setAuthMessage('Connexion en cours…');
+      socket.emit('reconnect_player', { username, country });
+    }
+
     let username = sessionStorage.getItem('username');
     let country = sessionStorage.getItem('country');
 
     if (username && country) {
-      socket.emit('reconnect_player', { username, country });
+      connectWithStoredInfo();
     } else {
-      const info = askForPlayerInfo();
-      if (!info) {
-        clearStoredSession();
-        throw new Error('Informations manquantes.');
-      }
-      username = info.username;
-      country = info.country;
-      socket.emit('register', { username, country });
+      setAuthMessage('Saisis ton pseudo et ton pays pour rejoindre le salon.');
     }
 
     // Récupération des éléments du DOM
     const targetSelect = document.getElementById('targetSelect');
+    const connectBtn = document.getElementById('connectBtn');
     const letterInput = document.getElementById('letterInput');
     const guessBtn = document.getElementById('guessBtn');
     const countryInput = document.getElementById('countryInput');
@@ -134,7 +150,11 @@
     const historyDiv = document.getElementById('history');
     const messageBox = document.getElementById('messageBox');
 
-    document.getElementById('status').textContent = `Connecté en tant que ${username}.`;
+    if (username && country) {
+      document.getElementById('status').textContent = `Connexion en cours pour ${username}.`;
+    } else {
+      document.getElementById('status').textContent = 'Entrez un pseudo et votre pays secret pour commencer.';
+    }
 
     // --- FONCTIONS DE RENDU ---
     function renderTurn(current) {
@@ -275,6 +295,24 @@
     }
 
     // --- ÉCOUTEURS D'ÉVÉNEMENTS ---
+    connectBtn.addEventListener('click', () => {
+      const info = readEnteredPlayerInfo();
+      if (!info) return;
+      persistPlayerInfo(info);
+      username = info.username;
+      country = info.country;
+      setAuthMessage('Connexion en cours…');
+      socket.emit('register', { username, country });
+    });
+
+    document.getElementById('usernameInput').addEventListener('keyup', (event) => {
+      if (event.key === 'Enter') connectBtn.click();
+    });
+
+    document.getElementById('countryInput').addEventListener('keyup', (event) => {
+      if (event.key === 'Enter') connectBtn.click();
+    });
+
     document.getElementById('readyBtn').onclick = () => {
       socket.emit('set_ready', { username });
       document.getElementById('readyBtn').disabled = true;
@@ -354,25 +392,24 @@
 
     // --- ENTRÉES SOCKET.IO ---
     socket.on('registration_failed', (data) => {
-      alert(data ? data.message : "Inscription échouée.");
       clearStoredSession();
-      window.location.reload();
+      username = '';
+      country = '';
+      setAuthMessage(data ? data.message : 'Inscription échouée.', true);
+      document.getElementById('status').textContent = 'Connexion impossible. Réessaie avec un pseudo et un pays valides.';
     });
 
     socket.on('reconnect_failed', (data) => {
       clearStoredSession();
-      const info = askForPlayerInfo();
-      if (!info) {
-        window.location.reload();
-        return;
-      }
-      username = info.username;
-      country = info.country;
-      socket.emit('register', { username, country });
+      username = '';
+      country = '';
+      setAuthMessage(data ? data.message : 'Reconnexion impossible.', true);
+      document.getElementById('status').textContent = 'Connexion impossible. Réessaie avec un pseudo et un pays valides.';
     });
 
     socket.on('reconnect_success', () => {
       document.getElementById('status').textContent = `Reconnecté en tant que ${username}.`;
+      setAuthMessage(`Reconnecté en tant que ${username}.`);
       socket.emit('force_state', {});
     });
 
