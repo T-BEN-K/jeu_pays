@@ -45,7 +45,7 @@
           
           <h2>Scores</h2>
           <div id="scores" class="scoreboard"></div>
-          <div id="revealedWords" class="revealed-words"></div>
+          <div id="revealedWords" class="revealed-words" style="display:none;"></div>
           <h2>État des joueurs</h2>
           <div id="playersState" class="players-state"></div>
         </div>
@@ -104,6 +104,7 @@
     const guessCountryBtn = document.getElementById('guessCountryBtn');
     const resetBtn = document.getElementById('resetBtn');
     const chatInput = document.getElementById('chatInput');
+    const replayBtnId = 'replayBtn';
     const sendChatBtn = document.getElementById('sendChatBtn');
     const turnLabel = document.getElementById('turn');
     const timerLabel = document.getElementById('timer');
@@ -131,10 +132,9 @@
     }
 
     function renderScores(players, scores) {
-      let html = '<table><tr><th>Joueur</th><th>Score</th><th>Pays</th></tr>';
+      let html = '<table><tr><th>Joueur</th><th>Score</th></tr>';
       for (const name in players) {
-        const info = players[name];
-        html += `<tr><td>${name.toUpperCase()}</td><td>${scores[name] || 0}</td><td>${info.country.toUpperCase()}</td></tr>`;
+        html += `<tr><td>${name.toUpperCase()}</td><td>${scores[name] || 0}</td></tr>`;
       }
       html += '</table>';
       scoresDiv.innerHTML = html;
@@ -293,6 +293,18 @@
       }
     });
 
+    function addReplayButton() {
+      if (document.getElementById(replayBtnId)) return;
+      const button = document.createElement('button');
+      button.id = replayBtnId;
+      button.className = 'secondary-button';
+      button.textContent = 'Rejouer';
+      button.onclick = () => {
+        socket.emit('reset_game', { username });
+      };
+      messageBox.appendChild(button);
+    }
+
     sendChatBtn.addEventListener('click', () => {
       const text = chatInput.value.trim();
       if (!text) return;
@@ -393,16 +405,22 @@
 
     socket.on('game_over', (data) => {
       const ranking = Array.isArray(data.ranking) ? data.ranking : Object.entries(data.scores || {}).sort((a, b) => b[1] - a[1]).map(([name, score]) => ({ name, score, country: currentPlayers[name]?.country || '' }));
+      const podium = ranking.slice(0, 3).map((entry, index) => {
+        const rankClass = index === 0 ? 'first' : index === 1 ? 'second' : 'third';
+        return `<div class="podium-item ${rankClass}"><strong>${['🥇', '🥈', '🥉'][index]}</strong><br>${entry.name.toUpperCase()}<br>${entry.score} POINT${entry.score > 1 ? 'S' : ''}</div>`;
+      }).join('');
       const rankingHtml = ranking.map((entry, index) => `<li>${index + 1}. ${entry.name.toUpperCase()} — ${entry.score} POINT${entry.score > 1 ? 'S' : ''}</li>`).join('');
       const countriesHtml = ranking.map((entry) => `<li>${entry.name.toUpperCase()} : ${entry.country.toUpperCase()}</li>`).join('');
       messageBox.innerHTML = `
         <div class="game-over-card">
-          <div class="game-over-title">FIN DE PARTIE</div>
+          <div class="game-over-title">🎉 FIN DE PARTIE</div>
+          <div class="podium">${podium}</div>
           <div><strong>CLASSEMENT</strong></div>
           <ul class="ranking-list">${rankingHtml}</ul>
           <div style="margin-top:10px;"><strong>PAYS DES JOUEURS</strong></div>
           <ul class="country-list">${countriesHtml}</ul>
         </div>`;
+      addReplayButton();
       letterInput.disabled = true;
       countryInput.disabled = true;
       guessBtn.disabled = true;
@@ -412,6 +430,9 @@
 
     socket.on('game_reset', (data) => {
       updateState(data.players, data.scores);
+      if (document.getElementById(replayBtnId)) {
+        document.getElementById(replayBtnId).remove();
+      }
       messageBox.textContent = 'Partie réinitialisée. Préparez-vous à repartir !';
       letterInput.disabled = true;
       countryInput.disabled = true;

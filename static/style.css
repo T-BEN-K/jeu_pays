@@ -207,16 +207,45 @@ button:disabled {
 .game-over-card {
   background: linear-gradient(135deg, rgba(255, 215, 0, 0.18), rgba(255, 179, 71, 0.12));
   border: 1px solid rgba(255, 224, 102, 0.35);
-  border-radius: 16px;
-  padding: 16px;
+  border-radius: 20px;
+  padding: 18px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
 }
 
 .game-over-title {
-  font-size: 1.1rem;
-  margin-bottom: 10px;
+  font-size: 1.2rem;
+  margin-bottom: 12px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+.podium {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.podium-item {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 10px;
+  text-align: center;
+}
+
+.podium-item.first {
+  border-color: #ffd700;
+  transform: translateY(-4px);
+}
+
+.podium-item.second {
+  border-color: #c0c0c0;
+}
+
+.podium-item.third {
+  border-color: #cd7f32;
 }
 
 .ranking-list,

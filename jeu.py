@@ -38,6 +38,32 @@ def build_game_over_payload():
     return {'scores': scores, 'players': players, 'ranking': ranking}
 
 
+def get_competing_players():
+    return [
+        name for name in turn_order
+        if name in players
+        and players[name].get('online', True)
+        and not players[name]['eliminated']
+        and players[name].get('active', True)
+    ]
+
+
+def finish_game():
+    global current_turn, game_active
+    if not game_active:
+        return
+    append_message('Partie terminée.')
+    game_active = False
+    for p in players:
+        players[p]['turn'] = False
+    current_turn = None
+    socketio.emit('game_active', {'active': False})
+    socketio.emit('game_over', build_game_over_payload())
+    socketio.emit('update_players', players)
+    socketio.emit('update_scores', scores)
+    set_timer(0)
+
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -90,33 +116,28 @@ def disconnect():
     if not username or username not in players:
         return
 
-    leaving = players.pop(username)
-    scores.pop(username, None)
+    leaving = players[username]
+    leaving['online'] = False
+    leaving['active'] = False
+    leaving['eliminated'] = True
+    leaving['status'] = 'hors ligne'
     turn_order = [p for p in turn_order if p != username]
 
-    if game_active and leaving['active'] and not leaving['eliminated']:
-        append_message(f'{username} a quitté la partie et est retiré(e) du jeu.')
-        if username == current_turn or current_turn not in players or players.get(current_turn, {}).get('eliminated', True):
-            if not next_turn():
-                game_active = False
-                socketio.emit('game_active', {'active': game_active})
-                socketio.emit('update_players', players)
-                socketio.emit('update_scores', scores)
-                return
-        else:
-            socketio.emit('update_players', players)
+    if game_active and not leaving['eliminated']:
+        append_message(f'{username} est hors ligne et est éliminé(e).')
     else:
-        append_message(f'{username} a quitté.')
-        socketio.emit('update_players', players)
+        append_message(f'{username} est hors ligne.')
 
+    socketio.emit('update_players', players)
     socketio.emit('update_scores', scores)
     if game_active:
-        remaining = [p for p in players.values() if p['active'] and not p['eliminated']]
+        remaining = get_competing_players()
         if len(remaining) <= 1:
-            append_message('Il ne reste plus qu’un joueur, fin de la partie.')
-            game_active = False
-            socketio.emit('game_active', {'active': game_active})
-            socketio.emit('game_over', build_game_over_payload())
+            append_message('Il ne reste plus qu’un joueur en course, fin de la partie.')
+            finish_game()
+            return
+        if username == current_turn or current_turn not in players or players.get(current_turn, {}).get('eliminated', True):
+            next_turn()
 
 
 @socketio.on('force_state')
@@ -142,6 +163,11 @@ def reconnect_player(data):
 
     sid_to_username[request.sid] = username
     username_to_sid[username] = request.sid
+    if username in players:
+        players[username]['online'] = True
+        players[username]['active'] = not game_active
+        players[username]['eliminated'] = False
+        players[username]['status'] = 'en jeu' if game_active else 'en attente de prêt'
     emit('game_active', {'active': game_active})
     emit('reconnect_success', {'message': 'Reconnecté avec succès.'})
     emit('update_players', players)
@@ -171,6 +197,7 @@ def register(data):
         'turn': False,
         'eliminated': False,
         'active': active,
+        'online': True,
         'status': 'en attente' if not active else 'en attente de prêt',
         'eliminations': 0
     }
@@ -212,6 +239,7 @@ def reset_game(data):
         players[p]['turn'] = False
         players[p]['eliminated'] = False
         players[p]['active'] = True
+        players[p]['online'] = True
         players[p]['status'] = 'en attente de prêt'
     scores = {p: 0 for p in players}
     turn_order = [p for p in players]
@@ -276,16 +304,13 @@ def guess_letter(data):
                 revealed[i] = letter
                 found = True
         if found:
-            scores[username] += 1
             append_message(f'{username} a trouvé {letter} sur {target} !')
             socketio.emit('update_word', {'target': target, 'revealed': revealed})
-            socketio.emit('update_scores', scores)
             set_timer(TURN_SECONDS)
             if ''.join(revealed) == country:
                 players[target]['eliminated'] = True
                 append_message(f'{target} est éliminé(e) par {username} !')
                 socketio.emit('player_eliminated', {'target': target, 'by': username})
-                socketio.emit('update_scores', scores)
                 if not next_turn():
                     return
         else:
@@ -327,6 +352,7 @@ def guess_country(data):
             return
     else:
         append_message(f'La proposition {proposal} pour {target} n’était pas la bonne.')
+        set_timer(TURN_SECONDS)
         next_turn()
 
 
@@ -360,25 +386,17 @@ socketio.start_background_task(timer_loop)
 
 def activate_waiting_players():
     for p in players.values():
-        if not p['active']:
+        if not p['active'] and p.get('online', True):
             p['active'] = True
             p['status'] = 'en attente de prêt'
 
 
 def next_turn():
     global current_turn, game_active
-    active = [p for p in turn_order if p in players and not players[p]['eliminated']]
+    active = get_competing_players()
     if len(active) <= 1:
-        append_message('Partie terminée.')
-        socketio.emit('game_over', build_game_over_payload())
         activate_waiting_players()
-        for p in players:
-            players[p]['turn'] = False
-        current_turn = None
-        game_active = False
-        socketio.emit('game_active', {'active': game_active})
-        socketio.emit('update_players', players)
-        set_timer(0)
+        finish_game()
         active_players = [p for p in players.values() if p['active']]
         if len(active_players) >= 2 and all(p['ready'] for p in active_players):
             start_game()
