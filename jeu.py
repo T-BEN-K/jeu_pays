@@ -3,7 +3,7 @@ from flask_socketio import SocketIO, emit
 import random, re, threading
 
 app = Flask(__name__)
-socketio = SocketIO(app, async_mode="threading")
+socketio = SocketIO(app, async_mode="gevent")
 
 players = {}
 scores = {}
