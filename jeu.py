@@ -27,12 +27,6 @@ def sanitize(text):
 def index():
     return render_template('index.html')
 
-
-@app.route('/game')
-def game():
-    return render_template('game.html')
-
-
 def append_history(message):
     history.append(message)
     if len(history) > MAX_HISTORY:
