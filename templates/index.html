@@ -14,7 +14,7 @@
       <p id="status">Entrez un pseudo et votre pays secret pour commencer.</p>
       <div id="authPanel" class="auth-panel">
         <input type="text" id="usernameInput" maxlength="12" placeholder="Pseudo" autocomplete="username">
-        <input type="text" id="countryInput" maxlength="30" placeholder="Pays" autocomplete="off">
+        <input type="text" id="authCountryInput" maxlength="30" placeholder="Pays" autocomplete="off">
         <button id="connectBtn">Se connecter</button>
         <div id="authMessage" class="message-box"></div>
       </div>
@@ -38,7 +38,7 @@
           <button id="guessBtn" disabled>Proposer la lettre</button>
 
           <h2>Propose un pays</h2>
-          <input type="text" id="countryInput" maxlength="30" placeholder="Pays" autocomplete="off" disabled>
+          <input type="text" id="proposalCountryInput" maxlength="30" placeholder="Pays" autocomplete="off" disabled>
           <button id="guessCountryBtn" disabled>Proposer le pays</button>
           <button id="resetBtn" class="secondary-button">Réinitialiser la partie</button>
           <div id="messageBox" class="message-box">En attente du tour ou du début de partie...</div>
@@ -97,9 +97,9 @@
 
     function readEnteredPlayerInfo() {
       const usernameInput = document.getElementById('usernameInput');
-      const countryInput = document.getElementById('countryInput');
+      const authCountryInput = document.getElementById('authCountryInput');
       const rawUser = (usernameInput?.value || '').trim().toUpperCase().replace(/[^A-Z]/g, '');
-      const rawCountry = (countryInput?.value || '').trim().toUpperCase().replace(/[^A-Z]/g, '');
+      const rawCountry = (authCountryInput?.value || '').trim().toUpperCase().replace(/[^A-Z]/g, '');
       if (!rawUser || !rawCountry || rawCountry.length < 2) {
         setAuthMessage('Entre un pseudo et un pays valide (2 lettres minimum).', true);
         return null;
@@ -143,7 +143,7 @@
     const connectBtn = document.getElementById('connectBtn');
     const letterInput = document.getElementById('letterInput');
     const guessBtn = document.getElementById('guessBtn');
-    const countryInput = document.getElementById('countryInput');
+    const proposalCountryInput = document.getElementById('proposalCountryInput');
     const guessCountryBtn = document.getElementById('guessCountryBtn');
     const resetBtn = document.getElementById('resetBtn');
     const clearLobbyBtn = document.getElementById('clearLobbyBtn');
@@ -171,7 +171,7 @@
       const isMyTurn = current === username;
       letterInput.disabled = !isMyTurn;
       guessBtn.disabled = !isMyTurn;
-      countryInput.disabled = !isMyTurn;
+      proposalCountryInput.disabled = !isMyTurn;
       guessCountryBtn.disabled = !isMyTurn;
       targetSelect.disabled = !isMyTurn;
       if (isMyTurn) {
@@ -319,7 +319,7 @@
       if (event.key === 'Enter') connectBtn.click();
     });
 
-    document.getElementById('countryInput').addEventListener('keyup', (event) => {
+    document.getElementById('authCountryInput').addEventListener('keyup', (event) => {
       if (event.key === 'Enter') connectBtn.click();
     });
 
@@ -346,7 +346,7 @@
     });
 
     guessCountryBtn.addEventListener('click', () => {
-      const country = countryInput.value.toUpperCase().replace(/[^A-Z]/g, '');
+      const country = proposalCountryInput.value.toUpperCase().replace(/[^A-Z]/g, '');
       const target = targetSelect.value;
       if (!country) {
         messageBox.textContent = 'Écris un pays valide.';
@@ -357,8 +357,8 @@
         return;
       }
       socket.emit('guess_country', { username, target, country });
-      countryInput.value = '';
-      countryInput.focus();
+      proposalCountryInput.value = '';
+      proposalCountryInput.focus();
     });
 
     resetBtn.addEventListener('click', () => {
@@ -396,7 +396,7 @@
       if (event.key === 'Enter') guessBtn.click();
     });
 
-    countryInput.addEventListener('keyup', (event) => {
+    proposalCountryInput.addEventListener('keyup', (event) => {
       if (event.key === 'Enter') guessCountryBtn.click();
     });
 
@@ -523,7 +523,7 @@
         </div>`;
       addReplayButton();
       letterInput.disabled = true;
-      countryInput.disabled = true;
+      proposalCountryInput.disabled = true;
       guessBtn.disabled = true;
       guessCountryBtn.disabled = true;
       targetSelect.disabled = true;
@@ -537,7 +537,7 @@
       }
       messageBox.textContent = 'Partie réinitialisée. Préparez-vous à repartir !';
       letterInput.disabled = true;
-      countryInput.disabled = true;
+      proposalCountryInput.disabled = true;
       guessBtn.disabled = true;
       guessCountryBtn.disabled = true;
       targetSelect.disabled = true;

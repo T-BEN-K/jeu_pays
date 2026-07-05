@@ -29,11 +29,12 @@ def build_game_over_payload():
             {
                 'name': name,
                 'score': scores.get(name, 0),
-                'country': players.get(name, {}).get('country', '')
+                'country': players.get(name, {}).get('country', ''),
+                'eliminated': players.get(name, {}).get('eliminated', False)
             }
             for name in players
         ),
-        key=lambda item: (-item['score'], item['name'])
+        key=lambda item: (item['eliminated'], -item['score'], item['name'])
     )
     return {'scores': scores, 'players': players, 'ranking': ranking}
 
@@ -108,6 +109,25 @@ def finish_game():
 @app.route('/')
 def index():
     return render_template('index.html')
+
+def reset_round_state():
+    global turn_order, current_turn, scores, history, timer_value, game_active
+    game_active = False
+    turn_order = []
+    current_turn = None
+    timer_value = 0
+    history = []
+    for player_name, info in players.items():
+        info['revealed'] = ['_'] * len(info.get('country', ''))
+        info['ready'] = False
+        info['turn'] = False
+        info['eliminated'] = False
+        info['active'] = True
+        info['online'] = True
+        info['status'] = 'en attente de prêt'
+    scores = {name: 0 for name in players}
+    socketio.emit('update_history', history)
+
 
 def append_history(message):
     history.append(message)
@@ -320,29 +340,17 @@ def clear_lobby(data):
 
 @socketio.on('reset_game')
 def reset_game(data):
-    global turn_order, current_turn, scores, game_active
     username = sanitize(data.get('username', ''))
     if username not in players:
         return
     cleanup_lobby_players()
-    game_active = False
-    for p in players:
-        players[p]['revealed'] = ['_'] * len(players[p]['country'])
-        players[p]['ready'] = False
-        players[p]['turn'] = False
-        players[p]['eliminated'] = False
-        players[p]['active'] = True
-        players[p]['online'] = True
-        players[p]['status'] = 'en attente de prêt'
-    scores = {p: 0 for p in players}
-    turn_order = [p for p in players]
-    current_turn = None
+    reset_round_state()
     socketio.emit('game_reset', {'players': players, 'scores': scores})
     socketio.emit('update_turn', current_turn)
     socketio.emit('update_players', players)
     socketio.emit('update_scores', scores)
     set_timer(0)
-    append_message(f'{username} a réinitialisé la partie.')
+    socketio.emit('update_history', history)
 
 
 def start_game():
