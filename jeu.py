@@ -58,9 +58,11 @@ def finish_game():
         players[p]['turn'] = False
     current_turn = None
     socketio.emit('game_active', {'active': False})
-    socketio.emit('game_over', build_game_over_payload())
+    payload = build_game_over_payload()
+    socketio.emit('game_over', payload)
     socketio.emit('update_players', players)
     socketio.emit('update_scores', scores)
+    socketio.emit('show_final_scores', payload)
     set_timer(0)
 
 

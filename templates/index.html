@@ -403,6 +403,23 @@
       messageBox.textContent = `${data.target} est éliminé par ${data.by} !`;
     });
 
+    socket.on('show_final_scores', (data) => {
+      const ranking = Array.isArray(data.ranking) ? data.ranking : Object.entries(data.scores || {}).sort((a, b) => b[1] - a[1]).map(([name, score]) => ({ name, score, country: currentPlayers[name]?.country || '' }));
+      const rankingHtml = ranking.map((entry, index) => `<li>${index + 1}. ${entry.name.toUpperCase()} — ${entry.score} POINT${entry.score > 1 ? 'S' : ''}</li>`).join('');
+      const countriesHtml = ranking.map((entry) => `<li>${entry.name.toUpperCase()} : ${entry.country.toUpperCase()}</li>`).join('');
+      messageBox.innerHTML = `
+        <div class="game-over-card">
+          <div class="game-over-title">🏁 SCORE FINAL</div>
+          <ul class="ranking-list">${rankingHtml}</ul>
+          <div style="margin-top:10px;"><strong>PAYS DES JOUEURS</strong></div>
+          <ul class="country-list">${countriesHtml}</ul>
+        </div>`;
+      if (document.getElementById(replayBtnId)) {
+        document.getElementById(replayBtnId).remove();
+      }
+      addReplayButton();
+    });
+
     socket.on('game_over', (data) => {
       const ranking = Array.isArray(data.ranking) ? data.ranking : Object.entries(data.scores || {}).sort((a, b) => b[1] - a[1]).map(([name, score]) => ({ name, score, country: currentPlayers[name]?.country || '' }));
       const podium = ranking.slice(0, 3).map((entry, index) => {
